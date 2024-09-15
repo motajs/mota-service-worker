@@ -38,36 +38,6 @@ sw.addEventListener("message", (event) => {
 
 const loadTranspiler = once(() => import("./transpiler"));
 
-const fetchFile = async (id: number, path: string) => {
-  const project = await accessProjectById(id);
-  if (!project) return Response.redirect(BASE);
-  const [fs] = project;
-  if (pathUtils.extname(path) === ".ts") {
-    const { transpileTS } = await loadTranspiler();
-    return fs.promises.readFile(path, { encoding: "utf-8" })
-      .then((rawFile) => {
-        const result = transpileTS(rawFile as string, {
-          target: 99
-        });
-        return ResponseUtils.text(result, {
-          headers: [
-            ["content-type", "application/javascript"]
-          ]
-        });
-      })
-      .catch(() => ResponseUtils.create404());
-  }
-  return fs.promises.readFile(path)
-    .then((e) => {
-      return ResponseUtils.buffer(e as Buffer, {
-        headers: [
-          ["content-type", mime.getType(pathUtils.extname(path)) ?? ""]
-        ]
-      });
-    })
-    .catch(() => ResponseUtils.create404());
-};
-
 interface SWRouterContext extends RouterContext {
   url: URL;
   event: FetchEvent;
@@ -76,6 +46,12 @@ interface SWRouterContext extends RouterContext {
 }
 
 const handler = (action: (context: RouteContext<Response, SWRouterContext> & SWRouterContext, params: RouteParams) => RouteResult<Response>) => action as NonNullable<Route<Response, SWRouterContext>['action']>;
+
+const fixPathName = (pathname: string) => {
+  if (pathname === "") pathname = "/";
+  if (pathname.endsWith("/")) return pathname + "index.html";
+  return pathname;
+}
 
 const router = new UniversalRouter<Response, SWRouterContext>([
   {
@@ -167,16 +143,37 @@ const router = new UniversalRouter<Response, SWRouterContext>([
         })
       },
       {
+        path: "(.*)",
         action: handler(async (context) => {
-          const { id } = context.params;
-          return fetchFile(Number(id), "index.html");
-        })
-      },
-      {
-        path: "/(.*)",
-        action: handler(async (context) => {
-          const { id } = context.params;
-          return fetchFile(Number(id), String(context.params[0]));
+          const id = Number(context.params.id);
+          const pathname = fixPathName(String(context.params[0]));
+          const project = await accessProjectById(id);
+          if (!project) return Response.redirect(BASE);
+          const [fs] = project;
+          if (pathUtils.extname(pathname) === ".ts") {
+            const { transpileTS } = await loadTranspiler();
+            return fs.promises.readFile(pathname, { encoding: "utf-8" })
+              .then((rawFile) => {
+                const result = transpileTS(rawFile as string, {
+                  target: 99
+                });
+                return ResponseUtils.text(result, {
+                  headers: [
+                    ["content-type", "application/javascript"]
+                  ]
+                });
+              })
+              .catch(() => ResponseUtils.create404());
+          }
+          return fs.promises.readFile(pathname)
+            .then((e) => {
+              return ResponseUtils.buffer(e as Buffer, {
+                headers: [
+                  ["content-type", mime.getType(pathUtils.extname(pathname)) ?? ""]
+                ]
+              });
+            })
+            .catch(() => ResponseUtils.create404());
         })
       }
     ]
