@@ -24,6 +24,7 @@ export const useServiceWorker = (path: string, options?: RegistrationOptions) =>
   return {
     controller,
     registration,
-    isReady
+    ready: controllerReady,
+    isReady,
   };
 }

@@ -5,9 +5,11 @@ import { Button, List, Modal, Tree, Typography } from '@douyinfe/semi-ui';
 import { IconFile, IconFolder } from '@douyinfe/semi-icons';
 import { match } from 'ts-pattern';
 import { useQuery } from 'react-query';
-import { ProjectRecord } from '../idl';
+import { ForgetProjectMessage, ListProjectMessage, RegisterProjectMessage } from '@/idl';
 import { TreeNodeData } from '@douyinfe/semi-ui/lib/es/tree';
-import { useServiceWorker } from '../base/hooks/serviceWorker';
+import { useServiceWorker } from '@/base/hooks/serviceWorker';
+import { useCurrentFn, useStatic } from '@/base/hooks/utils';
+import { MessageClient } from '@/base/message';
 
 const { Text } = Typography;
 
@@ -21,38 +23,36 @@ const App: FC = () => {
     type: "module",
   });
 
-  const projectListQuery = useQuery([], async () => {
-    await navigator.serviceWorker.ready;
-    return fetch("./api/projectList").then(e => e.json());
-  });
-
-  const projectList: [ProjectRecord, boolean][] = projectListQuery.data?.data ?? [];
-
-  const openProject = (id: number) => {
-    window.open(`./tower/${id}/`, "_blank");
-  }
+  const messageClient = useStatic(() => new MessageClient(async (msg) => {
+    await serviceWorker.ready;
+    serviceWorker.controller!.postMessage(msg);
+  }));
 
   useEffect(() => {
-    const onMessage = (e: MessageEvent<[string, ...any]>) => {
-      const [op, ...params] = e.data;
-      match(op)
-        .with("register", "project.register", () => {
-          const [id] = params;
-          openProject(id);
-          projectListQuery.refetch();
-        });
+    const onMessage = (e: MessageEvent) => {
+      messageClient.emit(e.data);
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, []);
 
-  const registerProject = (handle: FileSystemDirectoryHandle) => {
-    serviceWorker.controller?.postMessage(["register", handle]);
+  const projectListQuery = useQuery([], async () => {
+    return messageClient.request(ListProjectMessage).catch(() => void 0);
+  });
+
+  const projectList = projectListQuery.data?.list ?? [];
+
+  const openProject = (id: number) => {
+    window.open(`./tower/${id}/`, "_blank");
   }
 
-  const forgetProject = (id: number) => {
-    serviceWorker.controller?.postMessage(["project.forget", id]);
-  }
+  const registerProject = useCurrentFn((handle: FileSystemDirectoryHandle) => {
+    messageClient.request(RegisterProjectMessage, { handle });
+  });
+
+  const forgetProject = useCurrentFn((id: number) => {
+    messageClient.request(ForgetProjectMessage, { id });
+  });
 
   const openLocalProject = async () => {
     try {
@@ -129,23 +129,22 @@ const App: FC = () => {
                   onClick={async (e) => {
                     if (actived) return;
                     e.preventDefault();
-                    openProject(id);
-                    // const state = await handle.queryPermission({ mode: "readwrite" });
-                    // if (state === "denied") {
-                    //   forgetProject(id);
-                    //   return;
-                    // }
-                    // const newState = await handle.requestPermission({ mode: "readwrite" });
-                    // match(newState)
-                    //   .with("granted", () => {
-                    //     openProject(id);
-                    //   })
-                    //   .with("prompt", () => {
-                    //     // 什么都不做
-                    //   })
-                    //   .with("denied", () => {
-                    //     forgetProject(id);
-                    //   });
+                    const state = await handle.queryPermission({ mode: "readwrite" });
+                    if (state === "granted") {
+                      openProject(id);
+                      return;
+                    }
+                    const newState = await handle.requestPermission({ mode: "readwrite" });
+                    match(newState)
+                      .with("granted", () => {
+                        openProject(id);
+                      })
+                      .with("prompt", () => {
+                        // 什么都不做
+                      })
+                      .with("denied", () => {
+                        forgetProject(id);
+                      });
                   }}
                 >打开</Text>
               }

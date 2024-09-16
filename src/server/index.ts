@@ -7,6 +7,8 @@ import fsScript from "./fsClient.js?raw";
 import { once, zip } from "lodash-es";
 import { cacheFirst, networkFirst } from "./cache";
 import { accessProjectById, forgetProject, listProject, registerProject } from "./project";
+import { MessageRoute, MessageServer, MessageType } from "@/base/message";
+import { ForgetProjectMessage, ListProjectMessage, RegisterProjectMessage } from "@/idl";
 
 const sw = self as ServiceWorkerGlobalScope;
 
@@ -20,20 +22,30 @@ sw.addEventListener("activate", (event) => {
   event.waitUntil(clients.claim());
 });
 
-sw.addEventListener("message", (event) => {
-  if (event.origin !== sw.origin) return;
-  const [op, ...params] = event.data;
-  match(op)
-    .with("register", "project.register", async () => {
-      const [handle] = params;
-      if (!event.source || !handle) return;
-      const projectId = await registerProject(handle);
-      event.source.postMessage(["register", projectId]);
-    })
-    .with("project.forget", async () => {
-      const [id] = params;
-      forgetProject(id);
-    });
+const route = <ReqT, ResT>(type: MessageType<ReqT, ResT>, handler: (req: ReqT) => ResT | Promise<ResT>) => [type, handler] as MessageRoute<ReqT, ResT>;
+
+const messageServer = new MessageServer([
+  route(RegisterProjectMessage, async ({ handle }) => {
+    const projectId = await registerProject(handle);
+    return {
+      id: projectId
+    };
+  }),
+  route(ForgetProjectMessage, async ({ id }) => {
+    forgetProject(id);
+  }),
+  route(ListProjectMessage, async () => {
+    const list = await listProject();
+    return {
+      list,
+    };
+  }),
+]);
+
+sw.addEventListener("message", async (event) => {
+  if (event.origin !== sw.origin || !event.source) return;
+  const response = await messageServer.serve(event.data);
+  event.source.postMessage(response);
 });
 
 const loadTranspiler = once(() => import("./transpiler"));
@@ -57,10 +69,6 @@ const router = new UniversalRouter<Response, SWRouterContext>([
   {
     path: "/api",
     children: [
-      {
-        path: "/projectList",
-        action: handler(async () => ResponseUtils.answer(200, "", await listProject())),
-      },
       {
         path: "/(.*)",
         action: handler(() => ResponseUtils.create404())
