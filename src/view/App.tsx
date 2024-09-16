@@ -1,6 +1,5 @@
 import { FC, useEffect } from 'react';
-import './App.css';
-import { useDark } from './dark';
+import styles from './App.module.less';
 import { Button, List, Modal, Tree, Typography } from '@douyinfe/semi-ui';
 import { IconFile, IconFolder } from '@douyinfe/semi-icons';
 import { match } from 'ts-pattern';
@@ -10,13 +9,13 @@ import { TreeNodeData } from '@douyinfe/semi-ui/lib/es/tree';
 import { useServiceWorker } from '@/base/hooks/serviceWorker';
 import { useCurrentFn, useStatic } from '@/base/hooks/utils';
 import { MessageClient } from '@/base/message';
+import DarkModeButton from '@/base/components/DarkModeButton';
 
 const { Text } = Typography;
 
 const isSupportLocalFS = "showDirectoryPicker" in window;
 
 const App: FC = () => {
-  useDark();
 
   const serviceWorker = useServiceWorker("./service-worker.js", {
     scope: window.location.pathname,
@@ -46,15 +45,18 @@ const App: FC = () => {
     window.open(`./tower/${id}/`, "_blank");
   }
 
-  const registerProject = useCurrentFn((handle: FileSystemDirectoryHandle) => {
-    messageClient.request(RegisterProjectMessage, { handle });
+  const registerProject = useCurrentFn(async (handle: FileSystemDirectoryHandle) => {
+    const { id } = await messageClient.request(RegisterProjectMessage, { handle });
+    projectListQuery.refetch();
+    openProject(id);
   });
 
-  const forgetProject = useCurrentFn((id: number) => {
+  const forgetProject = useCurrentFn(async (id: number) => {
     messageClient.request(ForgetProjectMessage, { id });
+    projectListQuery.refetch();
   });
 
-  const openLocalProject = async () => {
+  const selectLocalProject = async () => {
     try {
       const handle = await window.showDirectoryPicker({
         id: "mota-service-worker",
@@ -71,7 +73,7 @@ const App: FC = () => {
         }));
         const changeOne = () => {
           modal.destroy();
-          openLocalProject(); 
+          selectLocalProject(); 
         }
         const modal = Modal.confirm({
           content: (
@@ -103,54 +105,71 @@ const App: FC = () => {
     }
   }
 
+  const openUnactiveProject = async (id: number, handle: FileSystemDirectoryHandle) => {
+    const state = await handle.queryPermission({ mode: "readwrite" });
+    if (state === "granted") {
+      openProject(id);
+      return;
+    }
+    const newState = await handle.requestPermission({ mode: "readwrite" });
+    match(newState)
+      .with("granted", () => {
+        openProject(id);
+      })
+      .with("prompt", () => {
+        // 什么都不做
+      })
+      .with("denied", () => {
+        forgetProject(id);
+      });
+  }
+
   return (
     <div>
+      <div className={styles.topbar}>
+        <DarkModeButton />
+      </div>
       <div>
         <h2>Mota Service Worker</h2>
         <h2>在线版启动服务</h2>
       </div>
       <div>
         {isSupportLocalFS ? (
-          <Button loading={!serviceWorker.isReady} onClick={openLocalProject}>{serviceWorker.isReady ? "打开本地工程" : "启动服务加载中"}</Button>
+          <Button loading={!serviceWorker.isReady} onClick={selectLocalProject}>{serviceWorker.isReady ? "打开本地工程" : "启动服务加载中"}</Button>
         ) : (
           <p>你的浏览器不支持读写本地文件，请使用最新的桌面版 Chrome / Edge</p>
         )}
       </div>
-      <div>
-        <h3>历史记录</h3>
-        <List loading={projectListQuery.isLoading}>
-          {projectList.map(([{ id, name, handle }, actived]) => (
-            <List.Item
-              key={id}
-              main={<span>{`[${id}] ${name}`}</span>}
-              extra={
-                <Text
-                  link={{ href: `./tower/${id}/`, target: "_blank" }}
-                  onClick={async (e) => {
-                    if (actived) return;
-                    e.preventDefault();
-                    const state = await handle.queryPermission({ mode: "readwrite" });
-                    if (state === "granted") {
-                      openProject(id);
-                      return;
-                    }
-                    const newState = await handle.requestPermission({ mode: "readwrite" });
-                    match(newState)
-                      .with("granted", () => {
-                        openProject(id);
-                      })
-                      .with("prompt", () => {
-                        // 什么都不做
-                      })
-                      .with("denied", () => {
-                        forgetProject(id);
-                      });
-                  }}
-                >打开</Text>
-              }
-            />
-          ))}
-        </List>
+      <div className={styles.container}>
+        <div className={styles.left}>
+          <h3 className={styles.header}>历史记录</h3>
+          <List loading={projectListQuery.isLoading}>
+            {projectList.map(([{ id, name, handle }, actived]) => (
+              <List.Item
+                key={id}
+                main={<span>{`[${id}] ${name}`}</span>}
+                extra={
+                  <>
+                    <Text
+                      link={{ href: `./tower/${id}/`, target: "_blank" }}
+                      onClick={actived ? void 0 : (async (e) => {
+                        e.preventDefault();
+                        openUnactiveProject(id, handle);
+                      })}
+                    >打开</Text>
+                    <Text />
+                  </>
+                }
+              />
+            ))}
+          </List>
+        </div>
+        <div className={styles.line}></div>
+        <div className={styles.right}>
+          <Text link={{ href: "https://jq.qq.com/?_wv=1027&k=vYiZNxL6" }}>H5魔塔交流群</Text>
+          <Text link={{ href: "https://space.bilibili.com/494596570" }}>b站官方号</Text>
+          <Text link={{ href: "https://h5mota.com" }}>H5mota主站</Text>
+        </div>
       </div>
     </div>
   )
