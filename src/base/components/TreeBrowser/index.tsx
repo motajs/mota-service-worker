@@ -5,14 +5,13 @@ import Tree from '@douyinfe/semi-ui/lib/es/tree';
 import { useEffect, useState } from 'react'
 
 export interface TreeBrowserData extends TreeProps {
-  fileHandles: (FileSystemDirectoryHandle | FileSystemFileHandle)[],
-  registerProject: (handle: FileSystemDirectoryHandle) => void,
+  fileHandles: FileSystemHandleUnion[],
 }
 
 const TreeBrowser: FC<TreeBrowserData> = (props) => {
   const [fileTreeData, setFileTreeData] = useState<TreeNodeData[]>([])
 
-  const getTreeData = (handles: (FileSystemDirectoryHandle | FileSystemFileHandle)[], key: string = 'root') => {
+  const getTreeData = (handles: FileSystemHandleUnion[], key: string = 'root') => {
     return handles.map((handle): TreeNodeData => ({
       key: `${key}/${handle.name}`,
       icon: handle.kind === 'file' ? <IconFile /> : <IconFolder />,
@@ -34,34 +33,26 @@ const TreeBrowser: FC<TreeBrowserData> = (props) => {
     });
   }
 
-  const onLoadData = (data: TreeNodeData | undefined) => {
+  const onLoadData = async (data: TreeNodeData | undefined) => {
     if (!data || !data.key) {
       return Promise.resolve();
     }
     const { key, children } = data;
-    return new Promise<void>(resolve => {
-      const { handle } = data as { handle: FileSystemDirectoryHandle };
-      if (!children && handle && handle.kind === 'directory') {
-        Array.fromAsync(handle.values()).then((val) =>
-          setFileTreeData(origin => updateTreeData(origin, key, getTreeData(val, key)))
-        )
-      }
-      resolve();
-    });
+    const { handle } = data as { handle: FileSystemDirectoryHandle };
+    if (!children && handle && handle.kind === 'directory') {
+      const val = await Array.fromAsync(handle.values());
+      setFileTreeData(origin => updateTreeData(origin, key, getTreeData(val, key)))
+    }
   }
 
   useEffect(() => {
     setFileTreeData(getTreeData(props.fileHandles))
-  }, [])
+  }, [props.fileHandles])
 
   return (<Tree
     loadData={onLoadData}
     treeData={[...fileTreeData]}
-    onDoubleClick={(e, node) => {
-      const { handle } = node as { handle: FileSystemDirectoryHandle };
-      if (handle.kind !== "directory") return;
-      props.registerProject(handle);
-    }}
+    {...props}
   />)
 }
 

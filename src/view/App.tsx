@@ -74,7 +74,13 @@ const App: FC = () => {
             <div>
               <p>文件夹{handle.name}可能不是一个工程，是否选择错了？</p>
               <p>你可以<Text link onClick={changeOne}>换一个</Text>, 或者双击选择它的子文件夹</p>
-              <TreeBrowser fileHandles={fileHandles} registerProject={registerProject} />
+              <TreeBrowser fileHandles={fileHandles}
+                onDoubleClick={(e, node) => {
+                  const { handle } = node as { handle: FileSystemDirectoryHandle };
+                  if (handle.kind !== "directory") return;
+                  modal.destroy();
+                  registerProject(handle);
+                }} />
             </div>
           ),
           okText: "坚持打开",
