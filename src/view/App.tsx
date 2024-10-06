@@ -10,6 +10,7 @@ import { useServiceWorker } from '@/base/hooks/serviceWorker';
 import { useCurrentFn, useStatic } from '@/base/hooks/utils';
 import { MessageClient } from '@/base/message';
 import DarkModeButton from '@/base/components/DarkModeButton';
+import TreeBrowser from '@/base/components/TreeBrowser';
 
 const { Text } = Typography;
 
@@ -64,31 +65,22 @@ const App: FC = () => {
       });
       const fileHandles = await Array.fromAsync(handle.values());
       if (!fileHandles.some((e) => e.kind === "file" && e.name === "index.html")) {
-        const fileTreeData = fileHandles.map((handle): TreeNodeData => ({
-          key: handle.name,
-          icon: handle.kind === "file" ? <IconFile /> : <IconFolder />,
-          label: handle.name,
-          handle,
-          isLeaf: handle.kind === "file",
-        }));
         const changeOne = () => {
           modal.destroy();
-          selectLocalProject(); 
+          selectLocalProject();
         }
         const modal = Modal.confirm({
           content: (
             <div>
               <p>文件夹{handle.name}可能不是一个工程，是否选择错了？</p>
               <p>你可以<Text link onClick={changeOne}>换一个</Text>, 或者双击选择它的子文件夹</p>
-              <Tree
-                treeData={fileTreeData}
+              <TreeBrowser fileHandles={fileHandles}
                 onDoubleClick={(e, node) => {
                   const { handle } = node as { handle: FileSystemDirectoryHandle };
                   if (handle.kind !== "directory") return;
                   modal.destroy();
                   registerProject(handle);
-                }}
-              />
+                }} />
             </div>
           ),
           okText: "坚持打开",
