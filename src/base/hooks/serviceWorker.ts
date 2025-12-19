@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useOnce } from "./utils";
+import { useEffect, useState } from "react";
+import { useOnce, useStatic } from "./utils";
 import { usePromiseValue } from "./async";
 
 export const useServiceWorker = (path: string, options?: RegistrationOptions) => {
@@ -17,7 +17,7 @@ export const useServiceWorker = (path: string, options?: RegistrationOptions) =>
     return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
   }, []);
 
-  const controllerReady = useMemo(() => navigator.serviceWorker.ready, []);
+  const controllerReady = useStatic(() => navigator.serviceWorker.ready);
 
   const [registration, isReady] = usePromiseValue(controllerReady);
 

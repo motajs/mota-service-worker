@@ -10,6 +10,7 @@ import { useServiceWorker } from '@/base/hooks/serviceWorker';
 import { useCurrentFn, useStatic } from '@/base/hooks/utils';
 import { MessageClient } from '@/base/message';
 import DarkModeButton from '@/base/components/DarkModeButton';
+import { useStatePromise } from '@/base/hooks/async';
 
 const { Text } = Typography;
 
@@ -22,9 +23,11 @@ const App: FC = () => {
     type: "module",
   });
 
+  const controllerPromise = useStatePromise(serviceWorker.controller);
+
   const messageClient = useStatic(() => new MessageClient(async (msg) => {
-    await serviceWorker.ready;
-    serviceWorker.controller!.postMessage(msg);
+    const controller = await controllerPromise;
+    controller.postMessage(msg);
   }));
 
   useEffect(() => {
@@ -35,7 +38,7 @@ const App: FC = () => {
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, []);
 
-  const projectListQuery = useQuery([], async () => {
+  const projectListQuery = useQuery(['projectListQuery'], async () => {
     return messageClient.request(ListProjectMessage).catch(() => void 0);
   });
 

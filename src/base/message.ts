@@ -15,7 +15,7 @@ export class MessageClient {
 
   constructor(private readonly postMessage: (msg: any) => void) {}
 
-  emit(message: any) {
+  emit(message: unknown) {
     if (!Array.isArray(message)) {
       console.warn(`unexcpeted message format`, message);
       return;
@@ -61,7 +61,7 @@ export class MessageServer<T extends MessageRoute<any, any>[]> {
     this.handlerMap = new Map(routes.map(([msg, handler]) => [msg.type, handler]));
   }
 
-  async serve(message: any) {
+  async serve(message: unknown) {
     if (!Array.isArray(message)) {
       console.warn(`unexcpeted message format`, message);
       return;
