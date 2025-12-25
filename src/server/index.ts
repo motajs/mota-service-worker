@@ -4,7 +4,7 @@ import UniversalRouter, { Route, RouteContext, RouteParams, RouteResult, RouterC
 import { ResponseUtils } from "./utils";
 import mime from "mime";
 import fsScript from "./fsClient.js?raw";
-import { once, zip } from "lodash-es";
+import { once, zip } from "es-toolkit";
 import { cacheFirst, networkFirst } from "./cache";
 import { accessProjectById, forgetProject, listProject, registerProject } from "./project";
 import { MessageRoute, MessageServer, MessageType } from "@/base/message";
@@ -70,7 +70,7 @@ const router = new UniversalRouter<Response, SWRouterContext>([
     path: "/api",
     children: [
       {
-        path: "/(.*)",
+        path: "/*path",
         action: handler(() => ResponseUtils.create404())
       }
     ]
@@ -151,10 +151,10 @@ const router = new UniversalRouter<Response, SWRouterContext>([
         })
       },
       {
-        path: "(.*)",
+        path: "/*path",
         action: handler(async (context) => {
           const id = Number(context.params.id);
-          const pathname = fixPathName(String(context.params[0]));
+          const pathname = fixPathName((context.params.path as string[]).join("/"));
           const project = await accessProjectById(id);
           if (!project) return Response.redirect(BASE);
           const [fs] = project;
@@ -187,7 +187,7 @@ const router = new UniversalRouter<Response, SWRouterContext>([
     ]
   },
   {
-    path: "(.*)",
+    path: "*path",
     action: handler((context) => {
       const { pathname, request } = context;
       if (import.meta.env.DEV) return fetch(request);

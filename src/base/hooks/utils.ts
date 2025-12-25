@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
 import { defer } from "lodash-es";
+import { useRef, useState } from "react";
 
 export const useStatic = <T>(initializer: () => T) => {
   const [data] = useState(initializer);

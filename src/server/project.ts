@@ -1,5 +1,5 @@
 import { Dexie, EntityTable } from 'dexie';
-import { random } from 'lodash-es';
+import { random } from 'es-toolkit';
 import { FsaNodeFs } from 'memfs/lib/fsa-to-node';
 import { cachedAction } from './utils';
 import { ProjectRecord } from '@/idl';
